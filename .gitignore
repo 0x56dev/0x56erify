@@ -12,3 +12,6 @@ local.properties
 *.aab
 app/build/
 build/
+keystore.properties
+*.jks
+*.keystore

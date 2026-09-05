@@ -1,6 +1,7 @@
-Initial release (0.1.0):
+0.1.0 - Initial release
+
 - Pick a file with the system document picker
 - Compute SHA-256 or SHA-512 checksums with streamed, non-blocking hashing
 - Paste an expected hash for a MATCH / MISMATCH comparison
 - Copy or share the computed hash
-- Fully offline, no accounts, no analytics, no ads, no tracking
+- Fully offline: no accounts, no analytics, no ads, no tracking, no network access
