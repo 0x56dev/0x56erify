@@ -25,10 +25,19 @@ android {
         applicationId = "dev.x56.verify"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Disable AGP's dependency metadata block: it embeds a list of compile-time
+    // dependencies into the APK/bundle for Play Console reporting, which is
+    // irrelevant off Play and is flagged by F-Droid's reproducible-build scanner
+    // as an unwanted extra signing block.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     signingConfigs {
