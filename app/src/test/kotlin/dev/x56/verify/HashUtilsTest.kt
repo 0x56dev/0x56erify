@@ -101,4 +101,76 @@ class HashUtilsTest {
         val result = HashUtils.compare(computed, "z".repeat(64), HashAlgorithm.SHA_256)
         assertTrue(result is HashUtils.ComparisonResult.Invalid)
     }
+
+    // --- extractExpectedHash: pasted-checksum parsing -------------------------------------
+
+    @Test
+    fun `extractExpectedHash accepts a bare valid hash`() {
+        val hash = "a".repeat(64)
+        assertEquals(hash, HashUtils.extractExpectedHash(hash, HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts an uppercase valid hash`() {
+        val hash = "A".repeat(64)
+        assertEquals("a".repeat(64), HashUtils.extractExpectedHash(hash, HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts leading and trailing whitespace`() {
+        val hash = "a".repeat(64)
+        assertEquals(hash, HashUtils.extractExpectedHash("   $hash   ", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts a trailing newline`() {
+        val hash = "a".repeat(64)
+        assertEquals(hash, HashUtils.extractExpectedHash("$hash\n", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts sha256sum-style output with two spaces before the filename`() {
+        val hash = "a".repeat(64)
+        assertEquals(hash, HashUtils.extractExpectedHash("$hash  file.iso", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts a tab between hash and filename`() {
+        val hash = "a".repeat(64)
+        assertEquals(hash, HashUtils.extractExpectedHash("$hash\tfile.iso", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects invalid hexadecimal characters`() {
+        assertEquals(null, HashUtils.extractExpectedHash("g".repeat(64), HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects a too-short hash`() {
+        assertEquals(null, HashUtils.extractExpectedHash("a".repeat(63), HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects a too-long hash`() {
+        assertEquals(null, HashUtils.extractExpectedHash("a".repeat(65), HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects arbitrary text`() {
+        assertEquals(null, HashUtils.extractExpectedHash("not a hash at all", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash does not silently accept a valid-length hash buried mid-text`() {
+        val hash = "a".repeat(64)
+        val buried = "here is the hash $hash and then more text"
+        assertEquals(null, HashUtils.extractExpectedHash(buried, HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `compare Matches when pasted expected hash is sha256sum-style output`() {
+        val hash = "a".repeat(64)
+        val result = HashUtils.compare(hash, "$hash  downloaded-file.iso", HashAlgorithm.SHA_256)
+        assertTrue(result is HashUtils.ComparisonResult.Match)
+    }
 }

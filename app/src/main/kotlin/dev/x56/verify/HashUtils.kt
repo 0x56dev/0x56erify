@@ -43,6 +43,34 @@ object HashUtils {
         return normalized.all { it in '0'..'9' || it in 'a'..'f' }
     }
 
+    private val whitespaceRun = Regex("\\s+")
+
+    /**
+     * Extracts a digest of the expected length for [algorithm] from pasted input.
+     *
+     * Two shapes are accepted:
+     * 1. A bare hash: the entire (trimmed) input is exactly [HashAlgorithm.hexLength] hex
+     *    characters, case-insensitive.
+     * 2. Standard `sha256sum`/`sha512sum`-style output: `<hash>  filename`, with the hash as
+     *    the *first* whitespace-separated token (tabs or repeated spaces are fine).
+     *
+     * Anything else - including text that merely contains a hash-length hex run somewhere in
+     * the middle - is rejected rather than guessed at, since silently extracting a substring
+     * from arbitrary text could pick the wrong token and produce a false MATCH/MISMATCH.
+     */
+    fun extractExpectedHash(rawInput: String, algorithm: HashAlgorithm): String? {
+        val trimmed = rawInput.trim()
+        if (trimmed.isEmpty()) return null
+
+        val lowered = trimmed.lowercase()
+        if (isValidHexHash(lowered, algorithm)) return lowered
+
+        val tokens = trimmed.split(whitespaceRun)
+        if (tokens.size < 2) return null
+        val firstToken = tokens[0].lowercase()
+        return if (isValidHexHash(firstToken, algorithm)) firstToken else null
+    }
+
     sealed class ComparisonResult {
         object Match : ComparisonResult()
         object Mismatch : ComparisonResult()
@@ -50,20 +78,19 @@ object HashUtils {
     }
 
     /**
-     * Compares a computed hash against a user-supplied expected hash. Whitespace is trimmed and
-     * comparison is case-insensitive. Returns [ComparisonResult.Invalid] if the expected hash is
-     * empty or has an obviously wrong length/format for [algorithm].
+     * Compares a computed hash against a user-supplied expected hash. The expected hash is
+     * parsed with [extractExpectedHash] (bare hash or checksum-tool output), and comparison is
+     * case-insensitive. Returns [ComparisonResult.Invalid] if the expected hash is empty or
+     * cannot be unambiguously parsed into a digest of the correct length for [algorithm].
      */
     fun compare(computedHash: String, expectedHashRaw: String, algorithm: HashAlgorithm): ComparisonResult {
-        val expected = normalize(expectedHashRaw)
-        if (expected.isEmpty()) {
+        if (expectedHashRaw.trim().isEmpty()) {
             return ComparisonResult.Invalid("Enter an expected hash to compare.")
         }
-        if (!isValidHexHash(expected, algorithm)) {
-            return ComparisonResult.Invalid(
+        val expected = extractExpectedHash(expectedHashRaw, algorithm)
+            ?: return ComparisonResult.Invalid(
                 "Expected a ${algorithm.hexLength}-character hexadecimal ${algorithm.label} hash."
             )
-        }
         val computed = normalize(computedHash)
         return if (expected == computed) ComparisonResult.Match else ComparisonResult.Mismatch
     }
