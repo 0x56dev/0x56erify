@@ -19,6 +19,14 @@ result.
   expected hashes
 - No accounts, no analytics, no ads, no tracking, no network access
 
+## Screenshots
+
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/checksum.png" width="240" alt="0x56erify calculating a SHA-256 checksum">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/match.png" width="240" alt="0x56erify showing a successful checksum match">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/invalid-hash.png" width="240" alt="0x56erify validating an invalid SHA-256 hash">
+</p>
+
 ## Privacy
 
 0x56erify processes files locally on-device. It does not transmit files,
@@ -63,9 +71,9 @@ This project is designed to be straightforward to submit to F-Droid:
 - License: Apache License 2.0 (see [`LICENSE`](LICENSE)).
 - Fastlane-style metadata lives under
   `fastlane/metadata/android/en-US/` (`title.txt`, `short_description.txt`,
-  `full_description.txt`, `changelogs/`). See
-  `fastlane/metadata/android/en-US/images/phoneScreenshots/README.md` for
-  screenshot instructions — none are committed yet.
+  `full_description.txt`, `changelogs/`, and phone screenshots under
+  `images/phoneScreenshots/` — see the [Screenshots](#screenshots) section
+  above).
 - `versionName` starts at `0.1.0`, `versionCode` at `1`. Releases are tagged
   as `vX.Y.Z`.
 

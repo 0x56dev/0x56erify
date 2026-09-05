@@ -1,24 +1,20 @@
 # Screenshots
 
-This directory is where F-Droid/Fastlane-style phone screenshots belong:
+Phone screenshots for the v0.1.0 release, captured on a physical Samsung
+Galaxy S26 Ultra:
 
-```
-fastlane/metadata/android/en-US/images/phoneScreenshots/1.png
-fastlane/metadata/android/en-US/images/phoneScreenshots/2.png
-...
-```
+- `checksum.png` - a file selected and its SHA-256 checksum computed
+- `match.png` - a valid expected hash entered, showing a MATCH result
+- `invalid-hash.png` - a malformed expected hash, showing the validation error
 
-No screenshots are committed yet (no emulator/device was available to capture
-them in the environment that generated this initial commit). To add them:
+These are also embedded in the project [README](../../../../../../README.md)
+under its Screenshots section.
 
-1. Install the debug build on a device or emulator.
-2. Capture PNG screenshots of the main screen (idle state, a computed hash,
-   and a MATCH/MISMATCH result are good candidates).
-3. Save them here as `1.png`, `2.png`, `3.png`, etc. (order controls display
-   order on F-Droid/store listings).
-4. Optionally add a feature graphic at
-   `fastlane/metadata/android/en-US/images/featureGraphic.png`.
+Note: F-Droid/Fastlane sorts screenshots alphabetically by filename for
+display order, so these three are shown as `checksum.png`, `invalid-hash.png`,
+`match.png` in that context.
 
-An `icon.png` (512x512) can also be placed at
-`fastlane/metadata/android/en-US/images/icon.png` for store listings that
-want a raster icon in addition to the in-app adaptive icon.
+A feature graphic can optionally be added at
+`fastlane/metadata/android/en-US/images/featureGraphic.png`, and a raster
+`icon.png` (512x512) at `fastlane/metadata/android/en-US/images/icon.png` for
+store listings that want one in addition to the in-app adaptive icon.
