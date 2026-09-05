@@ -1,0 +1,1 @@
+Local, offline SHA-256/SHA-512 checksum verification.

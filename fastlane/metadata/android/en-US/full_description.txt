@@ -1,0 +1,26 @@
+0x56erify is a minimal, offline-first checksum verification tool for Android.
+
+Pick a file with the system document picker, compute its SHA-256 or SHA-512
+checksum, and compare it against a hash you paste in (for example, one
+published alongside a download) to confirm the file wasn't corrupted or
+tampered with.
+
+Features:
+
+* Pick any file using Android's built-in Storage Access Framework picker
+* Compute SHA-256 or SHA-512 checksums
+* Streamed hashing: large files are never fully loaded into memory
+* Copy or share the computed hash
+* Paste an expected hash and get a clear MATCH / MISMATCH result
+* Case-insensitive, whitespace-tolerant hash comparison
+
+Privacy and permissions:
+
+* All processing happens entirely on-device
+* No network access, no INTERNET permission, no analytics, no ads, no accounts
+* No broad storage permissions - files are accessed only through the system
+  picker for the duration of the operation
+* No proprietary or Google Play Services / Firebase dependencies
+
+0x56erify is free and open source software, released under the Apache
+License 2.0.
