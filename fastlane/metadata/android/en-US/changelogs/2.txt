@@ -1,0 +1,6 @@
+0.1.1 - Bug fix
+
+- Fix expected-hash validation incorrectly rejecting hashes copied from
+  standard sha256sum/sha512sum terminal output (e.g. "<hash>  file.iso").
+  Pasted checksum-tool output, tabs/multiple spaces before the filename,
+  and mixed-case hashes are now parsed correctly.
