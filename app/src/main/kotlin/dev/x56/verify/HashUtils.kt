@@ -45,31 +45,47 @@ object HashUtils {
 
     private val whitespaceRun = Regex("\\s+")
 
-    /**
-     * Extracts a digest of the expected length for [algorithm] from pasted input.
-     *
-     * Two shapes are accepted:
-     * 1. A bare hash: the entire (trimmed) input is exactly [HashAlgorithm.hexLength] hex
-     *    characters, case-insensitive.
-     * 2. Standard `sha256sum`/`sha512sum`-style output: `<hash>  filename`, with the hash as
-     *    the *first* whitespace-separated token (tabs or repeated spaces are fine).
-     *
-     * Anything else - including text that merely contains a hash-length hex run somewhere in
-     * the middle - is rejected rather than guessed at, since silently extracting a substring
-     * from arbitrary text could pick the wrong token and produce a false MATCH/MISMATCH.
-     */
-    fun extractExpectedHash(rawInput: String, algorithm: HashAlgorithm): String? {
-        val trimmed = rawInput.trim()
-        if (trimmed.isEmpty()) return null
-
-        val lowered = trimmed.lowercase()
-        if (isValidHexHash(lowered, algorithm)) return lowered
-
-        val tokens = trimmed.split(whitespaceRun)
-        if (tokens.size < 2) return null
-        val firstToken = tokens[0].lowercase()
-        return if (isValidHexHash(firstToken, algorithm)) firstToken else null
+    /** Outcome of parsing a user-pasted expected hash; see [parseExpectedHash]. */
+    sealed class ExpectedHash {
+        data class Parsed(val hash: String) : ExpectedHash()
+        object Malformed : ExpectedHash()
+        object MultipleHashes : ExpectedHash()
     }
+
+    /**
+     * Parses pasted input into a single expected digest for [algorithm].
+     *
+     * The input is read line by line (blank lines ignored), and every line must be either:
+     * 1. A bare hash: exactly [HashAlgorithm.hexLength] hex characters, case-insensitive.
+     * 2. Standard `sha256sum`/`sha512sum`-style output: `<hash>  filename` (or `<hash> *filename`
+     *    in binary mode), with the hash as the *first* whitespace-separated token on the line.
+     *
+     * If any line is something else - including text that merely contains a hash-length hex run
+     * somewhere in the middle - the input is [ExpectedHash.Malformed]. If the lines carry more
+     * than one distinct hash (e.g. a whole `SHA256SUMS` file), the input is
+     * [ExpectedHash.MultipleHashes]. Either way it is rejected rather than guessed at, since
+     * picking one hash out of several could produce a false MATCH/MISMATCH. Only the first token
+     * of each line is treated as a hash, so a filename that is itself hex is not mistaken for one.
+     */
+    fun parseExpectedHash(rawInput: String, algorithm: HashAlgorithm): ExpectedHash {
+        val hashes = mutableSetOf<String>()
+        for (line in rawInput.lines()) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) continue
+            val hash = trimmed.split(whitespaceRun, limit = 2)[0].lowercase()
+            if (!isValidHexHash(hash, algorithm)) return ExpectedHash.Malformed
+            hashes += hash
+        }
+        return when (hashes.size) {
+            0 -> ExpectedHash.Malformed
+            1 -> ExpectedHash.Parsed(hashes.single())
+            else -> ExpectedHash.MultipleHashes
+        }
+    }
+
+    /** The single digest [parseExpectedHash] finds in [rawInput], or null if it rejects the input. */
+    fun extractExpectedHash(rawInput: String, algorithm: HashAlgorithm): String? =
+        (parseExpectedHash(rawInput, algorithm) as? ExpectedHash.Parsed)?.hash
 
     sealed class ComparisonResult {
         object Match : ComparisonResult()
@@ -79,18 +95,23 @@ object HashUtils {
 
     /**
      * Compares a computed hash against a user-supplied expected hash. The expected hash is
-     * parsed with [extractExpectedHash] (bare hash or checksum-tool output), and comparison is
+     * parsed with [parseExpectedHash] (bare hash or checksum-tool output), and comparison is
      * case-insensitive. Returns [ComparisonResult.Invalid] if the expected hash is empty or
-     * cannot be unambiguously parsed into a digest of the correct length for [algorithm].
+     * cannot be unambiguously parsed into a single digest of the correct length for [algorithm].
      */
     fun compare(computedHash: String, expectedHashRaw: String, algorithm: HashAlgorithm): ComparisonResult {
         if (expectedHashRaw.trim().isEmpty()) {
             return ComparisonResult.Invalid("Enter an expected hash to compare.")
         }
-        val expected = extractExpectedHash(expectedHashRaw, algorithm)
-            ?: return ComparisonResult.Invalid(
+        val expected = when (val parsed = parseExpectedHash(expectedHashRaw, algorithm)) {
+            is ExpectedHash.Parsed -> parsed.hash
+            ExpectedHash.Malformed -> return ComparisonResult.Invalid(
                 "Expected a ${algorithm.hexLength}-character hexadecimal ${algorithm.label} hash."
             )
+            ExpectedHash.MultipleHashes -> return ComparisonResult.Invalid(
+                "Several different ${algorithm.label} hashes were pasted. Paste only the line for this file."
+            )
+        }
         val computed = normalize(computedHash)
         return if (expected == computed) ComparisonResult.Match else ComparisonResult.Mismatch
     }

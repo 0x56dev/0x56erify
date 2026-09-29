@@ -173,4 +173,104 @@ class HashUtilsTest {
         val result = HashUtils.compare(hash, "$hash  downloaded-file.iso", HashAlgorithm.SHA_256)
         assertTrue(result is HashUtils.ComparisonResult.Match)
     }
+
+    // --- extractExpectedHash: multi-line input ----------------------------------------------
+
+    private val hashA = "a".repeat(64)
+    private val hashB = "b".repeat(64)
+
+    @Test
+    fun `parseExpectedHash rejects two different checksum lines with the target hash second`() {
+        val input = "$hashB  fileB.iso\n$hashA  fileA.iso"
+        assertEquals(
+            HashUtils.ExpectedHash.MultipleHashes,
+            HashUtils.parseExpectedHash(input, HashAlgorithm.SHA_256),
+        )
+    }
+
+    @Test
+    fun `parseExpectedHash rejects two different checksum lines with the target hash first`() {
+        val input = "$hashA  fileA.iso\n$hashB  fileB.iso"
+        assertEquals(
+            HashUtils.ExpectedHash.MultipleHashes,
+            HashUtils.parseExpectedHash(input, HashAlgorithm.SHA_256),
+        )
+    }
+
+    @Test
+    fun `parseExpectedHash rejects two different bare hashes on separate lines`() {
+        assertEquals(
+            HashUtils.ExpectedHash.MultipleHashes,
+            HashUtils.parseExpectedHash("$hashB\n$hashA", HashAlgorithm.SHA_256),
+        )
+    }
+
+    @Test
+    fun `compare returns Invalid rather than Mismatch or Match for several different hashes`() {
+        val bThenA = HashUtils.compare(hashA, "$hashB  fileB.iso\n$hashA  fileA.iso", HashAlgorithm.SHA_256)
+        val aThenB = HashUtils.compare(hashA, "$hashA  fileA.iso\n$hashB  fileB.iso", HashAlgorithm.SHA_256)
+        assertTrue(bThenA is HashUtils.ComparisonResult.Invalid)
+        assertTrue(aThenB is HashUtils.ComparisonResult.Invalid)
+        assertTrue((bThenA as HashUtils.ComparisonResult.Invalid).reason.contains("Several different"))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts duplicate lines carrying the same hash`() {
+        val input = "$hashA  file.iso\n${hashA.uppercase()}  file.iso\n"
+        assertEquals(hashA, HashUtils.extractExpectedHash(input, HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash ignores blank lines around a single checksum line`() {
+        assertEquals(hashA, HashUtils.extractExpectedHash("\n\n  $hashA  file.iso  \n\n", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects a checksum line followed by other text`() {
+        val input = "$hashA  file.iso\nsigned by the release team"
+        assertEquals(null, HashUtils.extractExpectedHash(input, HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash rejects a bare hash followed by other text`() {
+        assertEquals(null, HashUtils.extractExpectedHash("$hashA\nsee release notes", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts a filename that is itself a hash-length hex string`() {
+        assertEquals(hashA, HashUtils.extractExpectedHash("$hashA  $hashB", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts the binary-mode asterisk before the filename`() {
+        assertEquals(hashA, HashUtils.extractExpectedHash("$hashA *file.iso", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts CRLF line endings`() {
+        assertEquals(hashA, HashUtils.extractExpectedHash("$hashA  file.iso\r\n", HashAlgorithm.SHA_256))
+        assertEquals(
+            HashUtils.ExpectedHash.MultipleHashes,
+            HashUtils.parseExpectedHash("$hashA  a.iso\r\n$hashB  b.iso\r\n", HashAlgorithm.SHA_256),
+        )
+    }
+
+    @Test
+    fun `extractExpectedHash rejects a line whose hash is for a different algorithm`() {
+        val sha512Line = "c".repeat(128) + "  file.iso"
+        assertEquals(null, HashUtils.extractExpectedHash("$hashA  file.iso\n$sha512Line", HashAlgorithm.SHA_256))
+    }
+
+    @Test
+    fun `extractExpectedHash accepts a single sha512sum-style line`() {
+        val hash = "c".repeat(128)
+        assertEquals(hash, HashUtils.extractExpectedHash("$hash  file.iso", HashAlgorithm.SHA_512))
+    }
+
+    @Test
+    fun `compare Matches a real digest pasted as sha256sum output among duplicate lines`() {
+        val abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        val result = HashUtils.compare(abc, "$abc  abc.txt\n$abc  ./abc.txt", HashAlgorithm.SHA_256)
+        assertTrue(result is HashUtils.ComparisonResult.Match)
+    }
 }

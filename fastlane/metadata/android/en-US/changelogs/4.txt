@@ -1,0 +1,7 @@
+0.1.3 - Bug fix
+
+- Fix pasting several checksum lines (e.g. a whole SHA256SUMS file) into
+  the expected-hash field: only the first hash was used, so a genuine file
+  listed on a later line showed MISMATCH. Input with more than one
+  different hash, or with lines that are not checksum lines, is now
+  rejected with an explanation instead of being guessed at.
