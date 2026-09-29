@@ -1,0 +1,27 @@
+# Builds and verifies the UNSIGNED release APK for a pushed annotated v* tag.
+#
+# It needs an existing, immutable annotated tag on main and never creates,
+# moves or deletes tags, and never creates releases: the artifact is signed with
+# the release key and published locally by scripts/release/publish-release.sh,
+# which only accepts artifacts from this workflow. See docs/RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  unsigned-build:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_release-checks.yml
+    with:
+      mode: release
+      tag: ${{ github.ref_name }}

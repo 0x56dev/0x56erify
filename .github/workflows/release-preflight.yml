@@ -1,0 +1,30 @@
+# Manual preflight for an upcoming release, run BEFORE the version is tagged,
+# so a metadata typo or failing check never burns a version number.
+#
+# Run it from the Actions tab (branch: main) with the version to release, e.g.
+# 0.1.4. On success the run summary shows the exact commit to tag. Its artifact
+# is labelled "preflight" and is refused by the publish script.
+name: Release preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.1.4)"
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: release-preflight-${{ inputs.version }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_release-checks.yml
+    with:
+      mode: preflight
+      version: ${{ inputs.version }}

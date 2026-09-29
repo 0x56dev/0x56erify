@@ -47,6 +47,13 @@ Requirements: JDK 17, Android SDK (platform 35, build-tools 35.0.0).
 
 The debug APK is written to `app/build/outputs/apk/debug/`.
 
+## Releasing
+
+GitHub releases are built and verified by CI from an annotated `vX.Y.Z` tag,
+then rebuilt locally with Gradle (which signs them with the release key), checked
+against the CI build, and published by `scripts/release/publish-release.sh`.
+See [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Project structure
 
 ```

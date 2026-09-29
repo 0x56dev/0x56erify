@@ -1,0 +1,86 @@
+# Shared release checks, used by release-preflight.yml (before tagging) and
+# release.yml (after an annotated v* tag is pushed). It checks metadata, runs
+# the unit tests and lint-vital, builds the UNSIGNED release APK and uploads it
+# together with release-manifest.json.
+#
+# This workflow never signs, never touches tags or releases, and has no access
+# to signing material. The APK is signed and published locally by
+# scripts/release/publish-release.sh (see docs/RELEASING.md).
+#
+# Actions are pinned to full commit SHAs; update them deliberately.
+name: Release checks
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "preflight or release"
+        type: string
+        required: true
+      version:
+        description: "preflight: version to check, e.g. 0.1.4"
+        type: string
+        required: false
+        default: ""
+      tag:
+        description: "release: the pushed tag, e.g. v0.1.4"
+        type: string
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  checks:
+    name: ${{ inputs.mode }} checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INPUT_MODE: ${{ inputs.mode }}
+      INPUT_VERSION: ${{ inputs.version }}
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Check out the commit under test
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check release context
+        id: context
+        run: scripts/release/ci.sh context
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android build-tools
+        run: scripts/release/ci.sh sdk
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Check release metadata
+        run: scripts/release/check-metadata.sh --version "$RELEASE_VERSION" --mode "$RELEASE_MODE"
+
+      - name: Unit tests, lint-vital and unsigned release build
+        run: scripts/release/ci.sh build
+
+      - name: Check unsigned APK and write manifest
+        run: scripts/release/ci.sh package
+
+      - name: Upload unsigned APK and manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.context.outputs.artifact_name }}
+          path: |
+            dist/*-unsigned.apk
+            dist/release-manifest.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.mode == 'release' && 30 || 7 }}
+          compression-level: 0

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Test stand-in for curl: "downloads" the asset uploaded to the mock release.
+out=""
+while (($#)); do case "$1" in -o) out="$2"; shift 2 ;; *) shift ;; esac; done
+cp "$MOCK_DIR/uploaded.apk" "$out"

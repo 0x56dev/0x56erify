@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Test stand-in for ./gradlew in the throwaway repository built by
+# scripts/release/tests/run.sh. It is NOT a release tool: "assembleRelease"
+# links a tiny APK from AndroidManifest.xml with aapt2, using versionCode and
+# versionName from app/build.gradle.kts, and - like the real release build
+# when keystore.properties exists - signs it with that key. Otherwise the
+# output is unsigned, as in CI.
+#
+# FIXTURE_LOCAL_DIFFERS=1 adds an attribute, simulating a local build whose
+# contents differ from CI's.
+set -euo pipefail
+[[ " $* " == *" assembleRelease "* ]] || { echo "fixture gradlew: only assembleRelease is supported" >&2; exit 2; }
+: "${ANDROID_HOME:?}" "${FIXTURE_BUILD_TOOLS:?}"
+bt="$ANDROID_HOME/build-tools/$FIXTURE_BUILD_TOOLS"
+jar="$(find "$ANDROID_HOME/platforms" -path '*/android-*/android.jar' | sort -V | tail -n1)"
+code="$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)"
+name="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts)"
+out=app/build/outputs/apk/release
+mkdir -p "$out" app/build/tmp
+manifest=app/build/tmp/AndroidManifest.xml
+cp AndroidManifest.xml "$manifest"
+[[ "${FIXTURE_LOCAL_DIFFERS:-}" != 1 ]] || sed -i 's|<application />|<application android:label="differs" />|' "$manifest"
+# apksigcopier needs APKs larger than a ZIP comment search window (64 KiB),
+# so bundle a stored 80 KiB asset.
+mkdir -p app/build/tmp/assets
+head -c 81920 /dev/zero >app/build/tmp/assets/filler.bin
+"$bt/aapt2" link -o app/build/tmp/linked.apk --manifest "$manifest" -I "$jar" \
+  -A app/build/tmp/assets -0 bin \
+  --min-sdk-version 26 --target-sdk-version 34 --version-code "$code" --version-name "$name"
+"$bt/zipalign" -p -f 4 app/build/tmp/linked.apk "$out/app-release-unsigned.apk"
+if [[ -f keystore.properties ]]; then
+  prop() { sed -n "s/^$1=//p" keystore.properties; }
+  KS_PASS="$(prop storePassword)" KEY_PASS="$(prop keyPassword)" "$bt/apksigner" sign \
+    --ks "$(prop storeFile)" --ks-key-alias "$(prop keyAlias)" \
+    --ks-pass env:KS_PASS --key-pass env:KEY_PASS \
+    --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled false \
+    --v4-signing-enabled false --alignment-preserved \
+    --out "$out/app-release.apk" "$out/app-release-unsigned.apk"
+  rm "$out/app-release-unsigned.apk"
+fi

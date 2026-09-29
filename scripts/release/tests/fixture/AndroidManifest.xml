@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimal manifest for the tiny test APKs linked by fixture/gradlew. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.x56.verify">
+    <permission android:name="dev.x56.verify.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="dev.x56.verify.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+    <application />
+</manifest>

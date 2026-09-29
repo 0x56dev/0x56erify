@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Minimal stand-in for the gh CLI, used only by scripts/release/tests/run.sh.
+
+Serves the few GitHub API calls the release scripts make, for one release tag,
+from files in $MOCK_DIR: artifact.zip (the CI artifact), prev.apk (the latest
+published release's APK) and state.json (releases created during the test).
+MOCK_SCENARIO switches a single response to a failure case. Every call is
+appended to $MOCK_DIR/gh.log.
+"""
+import hashlib, json, os, shutil, subprocess, sys
+
+M = os.environ["MOCK_DIR"]
+SC = os.environ.get("MOCK_SCENARIO", "ok")
+REPO, TAG, PREV = os.environ["MOCK_REPO"], os.environ["MOCK_TAG"], os.environ["MOCK_PREV_TAG"]
+COMMIT, TAGOBJ = os.environ["MOCK_COMMIT"], os.environ["MOCK_TAGOBJ"]
+APP = os.environ["MOCK_APP_NAME"]
+RUN_ID, ART_ID, REL_ID = 1001, 2002, 3003
+STATE = os.path.join(M, "state.json")
+state = json.load(open(STATE)) if os.path.exists(STATE) else {"releases": []}
+argv = sys.argv[1:]
+open(os.path.join(M, "gh.log"), "a").write(" ".join(argv) + "\n")
+
+
+def sha(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def save():
+    json.dump(state, open(STATE, "w"))
+
+
+def emit(obj, jq=None):
+    data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
+    if jq:
+        data = subprocess.run(["jq", "-r", jq], input=data, capture_output=True, check=True).stdout
+    sys.stdout.buffer.write(data)
+    sys.exit(0)
+
+
+def not_found():
+    print("gh: Not Found (HTTP 404)", file=sys.stderr)
+    sys.exit(1)
+
+
+prev_asset = f"{APP}-{PREV[1:]}.apk"
+prev_release = {"id": 1, "tag_name": PREV, "draft": False, "name": PREV,
+                "assets": [{"name": prev_asset, "state": "uploaded",
+                            "digest": "sha256:" + sha(os.path.join(M, "prev.apk"))}]}
+
+
+def releases():
+    extra = [{"id": 9, "tag_name": TAG, "draft": True, "name": "stale draft", "assets": []}] \
+        if SC == "existing_draft" else []
+    return [prev_release] + state["releases"] + extra
+
+
+def run(run_id=RUN_ID):
+    return {"id": run_id, "event": "push", "head_branch": TAG, "head_sha": COMMIT,
+            "path": ".github/workflows/release-preflight.yml" if SC == "wrong_workflow"
+            else ".github/workflows/release.yml",
+            "status": "completed", "conclusion": "success", "run_attempt": 1,
+            "html_url": f"https://github.com/{REPO}/actions/runs/{run_id}",
+            "repository": {"full_name": REPO}, "head_repository": {"full_name": REPO}}
+
+
+if argv[:2] == ["auth", "status"]:
+    sys.exit(0)
+if argv[:2] == ["release", "download"]:
+    assert argv[2] == PREV and argv[argv.index("-p") + 1] == prev_asset, argv
+    shutil.copy(os.path.join(M, "prev.apk"), os.path.join(argv[argv.index("-D") + 1], prev_asset))
+    sys.exit(0)
+if argv[:2] == ["release", "create"]:
+    assert "--verify-tag" in argv and "--draft" in argv and "--generate-notes" not in argv, argv
+    data = open(argv[3], "rb").read()
+    if SC == "upload_corrupt":
+        data = data[:100] + bytes([data[100] ^ 1]) + data[101:]
+    open(os.path.join(M, "uploaded.apk"), "wb").write(data)
+    state["releases"].append({
+        "id": REL_ID, "tag_name": argv[2], "draft": True, "name": argv[argv.index("--title") + 1],
+        "html_url": f"https://github.com/{REPO}/releases/tag/{argv[2]}",
+        "assets": [{"name": os.path.basename(argv[3]), "state": "uploaded",
+                    "digest": "sha256:" + hashlib.sha256(data).hexdigest()}]})
+    save()
+    sys.exit(0)
+
+assert argv[0] == "api", argv
+jq, method, fields, path, i = None, "GET", [], None, 1
+while i < len(argv):
+    if argv[i] in ("-H", "--jq", "-X", "-F"):
+        val = argv[i + 1]
+        jq = val if argv[i] == "--jq" else jq
+        method = val if argv[i] == "-X" else method
+        if argv[i] == "-F":
+            fields.append(val)
+        i += 2
+    elif argv[i] in ("--paginate", "--silent"):
+        i += 1
+    else:
+        path, i = argv[i], i + 1
+p = path.split("?")[0]
+base = f"repos/{REPO}/"
+
+if p == base + f"git/ref/tags/{TAG}":
+    emit({"ref": f"refs/tags/{TAG}",
+          "object": {"type": "commit", "sha": COMMIT} if SC == "lightweight"
+          else {"type": "tag", "sha": TAGOBJ}}, jq)
+if p.startswith(base + "git/ref/tags/"):
+    not_found()
+if p == base + f"git/tags/{TAGOBJ}":
+    emit({"tag": TAG, "object": {"type": "commit", "sha": COMMIT}}, jq)
+if p.startswith(base + "compare/"):
+    emit({"status": "diverged" if SC == "not_on_main" else "ahead"}, jq)
+if p.startswith(base + "git/matching-refs/tags/"):
+    emit([], jq)
+if p == base + "releases/latest":
+    emit(prev_release, jq)
+if p == base + "releases":
+    emit(releases(), jq)
+if p == base + f"releases/tags/{TAG}":
+    found = [r for r in releases() if r["tag_name"] == TAG]
+    emit(found[0], jq) if found else not_found()
+if p == base + f"releases/{REL_ID}" and method == "PATCH":
+    assert fields == ["draft=false"], fields
+    state["releases"][0]["draft"] = False
+    save()
+    emit({}, jq)
+if p == base + "actions/workflows/release.yml/runs":
+    runs = [] if SC == "no_run" else [run()] + ([run(RUN_ID + 1)] if SC == "two_runs" else [])
+    emit({"workflow_runs": runs}, jq)
+if p == base + f"actions/runs/{RUN_ID}":
+    emit(run(), jq)
+if p == base + f"actions/runs/{RUN_ID}/artifacts":
+    name = ("preflight" if SC == "preflight_artifact" else "release") + f"-unsigned-{TAG[1:]}"
+    digest = "f" * 64 if SC == "bad_digest" else sha(os.path.join(M, "artifact.zip"))
+    emit({"artifacts": [{"id": ART_ID, "name": name, "expired": SC == "expired",
+                         "digest": "sha256:" + digest,
+                         "workflow_run": {"id": RUN_ID, "head_sha": COMMIT}}]}, jq)
+if p == base + f"actions/artifacts/{ART_ID}/zip":
+    emit(open(os.path.join(M, "artifact.zip"), "rb").read())
+print(f"mock gh: unhandled call: {' '.join(argv)}", file=sys.stderr)
+sys.exit(2)
